@@ -12,7 +12,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
         body { background: #070b14; color: white; font-family: 'Tajawal', sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
         
-        /* كود الطبقة الأمنية */
         #securityOverlay {
             position: fixed;
             inset: 0;
@@ -25,7 +24,6 @@
             transition: opacity 0.8s ease, visibility 0.8s;
         }
 
-        /* جعل محتوى الإعدادات غير مرئي خلف الطبقة في البداية */
         #contentWrapper {
             opacity: 0.1;
             filter: blur(10px);
@@ -33,7 +31,6 @@
             transition: all 1s ease;
         }
 
-        /* ستايلات الإعدادات الأصلية الخاصة بك */
         .glass-card { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); transition: 0.3s; }
         .glass-card:hover { border-color: rgba(37, 211, 102, 0.3); }
         .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
@@ -159,13 +156,13 @@
                 </button>
             </div>
             <div class="mt-4 text-center text-[10px] text-gray-500 italic">
-                تم تطوير هاذا المساعد بواسطة المطور رامي الحطامي
+                تم تطوير هذا المساعد بواسطة المطور رامي الحطامي
             </div>
         </div>
     </div>
 
     <script>
-        // وظيفة التحقق الحقيقي وفك القفل عبر السيرفر
+        // دالة التحقق والدخول
         async function verifyAccess() {
             const phone = document.getElementById('phoneIn').value;
             const code = document.getElementById('codeIn').value;
@@ -183,7 +180,6 @@
             });
 
             try {
-                // الاتصال الحقيقي بـ API السيرفر
                 const response = await fetch('/api/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -199,12 +195,11 @@
                         text: 'مرحباً بك في لوحة التحكم', 
                         background: '#070b14', 
                         color: '#fff', 
-                        timer: 2000,
+                        timer: 1500,
                         showConfirmButton: false 
                     }).then(() => {
-                        // إخفاء طبقة الأمان وإظهار الإعدادات
                         document.getElementById('securityOverlay').style.opacity = '0';
-                        document.getElementById('securityOverlay').style.visibility = 'hidden';
+                        setTimeout(() => { document.getElementById('securityOverlay').style.display = 'none'; }, 800);
                         
                         const wrapper = document.getElementById('contentWrapper');
                         wrapper.style.opacity = '1';
@@ -215,35 +210,57 @@
                     Swal.fire({ icon: 'error', title: 'فشل التوثيق', text: 'الرمز أو الرقم غير صحيح', background: '#070b14', color: '#fff' });
                 }
             } catch (error) {
-                Swal.fire({ icon: 'error', title: 'خطأ', text: 'فشل الاتصال بالسيرفر', background: '#070b14', color: '#fff' });
+                Swal.fire({ icon: 'error', title: 'خطأ', text: 'تعذر الاتصال بالسيرفر', background: '#070b14', color: '#fff' });
             }
         }
 
-        // دوالك الأصلية بدون تغيير
-        function updateConnectionStatus(isOnline) {
-            const dot = document.getElementById('statusIndicator');
-            const text = document.getElementById('statusText');
-            if(isOnline) {
-                dot.className = 'status-dot online border-2 border-[#070b14]';
-                text.innerText = 'متصل بالسيرفر الآن';
-                text.className = 'text-xs text-green-400 font-medium';
-            } else {
-                dot.className = 'status-dot offline border-2 border-[#070b14]';
-                text.innerText = 'غير متصل - جارٍ إعادة الربط...';
-                text.className = 'text-xs text-red-400 font-medium';
+        // دالة التحكم الحقيقية بالأزرار
+        async function toggleFeature(feature, status) {
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ feature, status })
+                });
+                const res = await response.json();
+                if(res.success) {
+                    const Toast = Swal.mixin({
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 2000,
+                        timerProgressBar: true,
+                        background: '#0f172a',
+                        color: '#fff'
+                    });
+                    Toast.fire({
+                        icon: 'success',
+                        title: `تم ${status ? 'تفعيل' : 'تعطيل'} الميزة بنجاح`
+                    });
+                }
+            } catch (e) {
+                console.error("خطأ في تحديث الإعدادات");
             }
         }
 
-        function saveEmoji() {
+        // دالة حفظ الإيموجي الحقيقي
+        async function saveEmoji() {
             const emoji = document.getElementById('emojiInput').value;
-            if(!emoji) return alert("يرجى إدخال إيموجي أولاً");
-            console.log("تم حفظ الإيموجي الجديد: " + emoji);
-            alert("تم تحديث إيموجي التفاعل بنجاح ✅");
-        }
+            if(!emoji) return Swal.fire({ icon: 'warning', title: 'تنبيه', text: 'أدخل إيموجي أولاً', background: '#070b14', color: '#fff' });
 
-        function toggleFeature(feature, status) {
-            console.log(`الميزة: ${feature} أصبحت الآن: ${status ? 'مفعلة' : 'معطلة'}`);
-            // هنا يرسل طلب للسيرفر لتغيير الإعدادات في الوقت الفعلي
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ emoji })
+                });
+                const res = await response.json();
+                if(res.success) {
+                    Swal.fire({ icon: 'success', title: 'تم الحفظ', text: 'تم تحديث إيموجي التفاعل بنجاح ✅', background: '#070b14', color: '#fff' });
+                }
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: 'خطأ', text: 'فشل حفظ الإيموجي', background: '#070b14', color: '#fff' });
+            }
         }
     </script>
 </body>
