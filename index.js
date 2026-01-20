@@ -33,7 +33,7 @@ const {
   const { PresenceControl, BotActivityFilter } = require('./data/presence');
   const qrcode = require('qrcode-terminal')
   const StickersTypes = require('wa-sticker-formatter')
-  const path = require('path') // تم التأكد من استدعاء path هنا لاستخدامه في الدالة أدناه
+  const path = require('path')
 
 // ==========================================
 // دالة حفظ رموز المصادقة للمستخدمين
@@ -80,41 +80,45 @@ const port = process.env.PORT || 9090;
 app.use(bodyparser.json());
 
 // ==========================================
-// الإضافة الجديدة: مسارات الـ API والواجهة
+// مسارات الـ API للتحكم الحقيقي
 // ==========================================
 
-// نقطة التحقق (API) التي تتصل بها واجهة immutech.html
+// 1. مسار التحقق من الرمز عند الدخول
 app.post('/api/verify', (req, res) => {
     const { phone, code } = req.body;
     const authPath = path.join(__dirname, 'users_auth.json');
-
-    if (!fs.existsSync(authPath)) {
-        return res.json({ success: false, message: 'لا توجد بيانات مصادقة مخزنة' });
-    }
-
+    if (!fs.existsSync(authPath)) return res.json({ success: false });
     const data = JSON.parse(fs.readFileSync(authPath));
-    
-    // التحقق من تطابق الرقم والرمز المخزن
     if (data[phone] && data[phone] === code) {
         res.json({ success: true });
     } else {
-        res.json({ success: false, message: 'الرمز أو رقم الهاتف غير صحيح' });
+        res.json({ success: false });
     }
 });
 
-// تقديم ملفات الواجهة من مجلد lib (مثل immutech.html)
-app.use(express.static(path.join(__dirname, 'lib')));
+// 2. مسار استقبال تحديثات الأزرار (AUTO_SEEN, ANTI_CALL, إلخ)
+app.post('/api/settings', (req, res) => {
+    const { feature, status, emoji } = req.body;
+    
+    // تحديث القيم في ملف الإعدادات config (يعمل في الجلسة الحالية)
+    if (feature === 'AUTO_SEEN') config.AUTO_READ_STATUS = status;
+    if (feature === 'AUTO_REACT') config.AUTO_REACT = status;
+    if (feature === 'ANTI_CALL') config.ANTI_CALL = status;
+    if (feature === 'ALWAYS_ONLINE') config.ALWAYS_ONLINE = status;
+    if (emoji) config.CUSTOM_EMOJI = emoji;
 
-// توجيه الزوار للواجهة مباشرة عند فتح الرابط الرئيسي
-app.get('/', (req, res) => {
-    res.redirect('/immutech.html');
+    console.log(`[⚙️] تم تحديث ${feature || 'الإيموجي'} إلى: ${status || emoji}`);
+    res.json({ success: true });
 });
+
+// تقديم ملفات الواجهة
+app.use(express.static(path.join(__dirname, 'lib')));
+app.get('/', (req, res) => { res.redirect('/immutech.html'); });
 
 // ==========================================
 
 const sessionDir = path.join(__dirname, 'sessions');
 const credsPath = path.join(sessionDir, 'creds.json');
-
 if (!fs.existsSync(sessionDir)) { fs.mkdirSync(sessionDir, { recursive: true }); }
 
 async function loadSession() {
@@ -146,7 +150,7 @@ async function connectToWA() {
     });
 
     conn.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        const { connection, lastDisconnect } = update;
         
         if (connection === 'close') {
             if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
@@ -154,41 +158,19 @@ async function connectToWA() {
             }
         } else if (connection === 'open') {
             console.log('[✅] Ramy PRO Connected');
-            
             const userJid = jidNormalizedUser(conn.user.id);
             const userPhone = userJid.split('@')[0];
-
-            // 1. إنشاء رمز دخول فريد (6 حروف وأرقام)
             const accessKey = Math.random().toString(36).substring(2, 8).toUpperCase();
             
-            // 2. حفظ الرمز في قاعدة البيانات ليتم استخدامه في الواجهة
             saveUserAuth(userPhone, accessKey);
 
-            // 3. رسالة الترحيب والتعليمات
-            const welcomeMsg = `🚀 *مرحباً بك في نظام Ramy PRO الذكي!*
-
-تم ربط حسابك بنجاح. إليك قائمة بمميزات المساعد الشخصي:
-━━━━━━━━━━━━━━━━━━
-👁️ *مشاهدة الحالات:* مفعلة تلقائياً.
-❤️ *التفاعل التلقائي:* مفعل (بإيموجي مخصص).
-📞 *رفض المكالمات:* ميزة ذكية لمنع الإزعاج.
-🕒 *متصل دائماً:* تظهر كـ Online على مدار الساعة.
-━━━━━━━━━━━━━━━━━━
-
-🔐 *بيانات الدخول للوحة التحكم:*
-📍 *الرابط:* http://localhost:${port}
-🔑 *رمز الدخول الخاص بك:* \`${accessKey}\`
-
-⚠️ *تنبيه:* هذا الرمز خاص بك فقط، استخدمه للدخول وتغيير الإعدادات من الواجهة.
-
-*المطور: رامي الحطامي* 👨‍💻`;
+            const welcomeMsg = `🚀 *مرحباً بك في نظام Ramy PRO الذكي!*\n\nتم ربط حسابك بنجاح.\n🔐 *بيانات الدخول للوحة التحكم:*\n📍 *الرابط:* http://localhost:${port}\n🔑 *رمز الدخول الخاص بك:* \`${accessKey}\`\n\n*المطور: رامي الحطامي* 👨‍💻`;
 
             await conn.sendMessage(userJid, { 
                 image: { url: `https://i.postimg.cc/xTTgKc2W/IMG-20250801-WA0019.jpg` },
                 caption: welcomeMsg 
             });
 
-            // تحميل الملحقات
             const pluginPath = path.join(__dirname, 'plugins');
             if (fs.existsSync(pluginPath)) {
                 fs.readdirSync(pluginPath).forEach((plugin) => {
@@ -201,26 +183,8 @@ async function connectToWA() {
     conn.ev.on('creds.update', saveCreds);
 }
 
-// تشغيل السيرفر والبوت
 app.listen(port, () => console.log(`[🚀] Server is running on port: ${port}`));
 connectToWA();
-
-if (!fs.existsSync(sessionDir)) { fs.mkdirSync(sessionDir, { recursive: true }); }
-
-async function loadSession() {
-    try {
-        if (!config.SESSION_ID) return null;
-        const megaFileId = config.SESSION_ID.startsWith('IMMU~') ? config.SESSION_ID.replace("IMMU~", "") : config.SESSION_ID;
-        const filer = File.fromURL(`https://mega.nz/file/${megaFileId}`);
-        const data = await new Promise((resolve, reject) => {
-            filer.download((err, data) => { if (err) reject(err); else resolve(data); });
-        });
-        fs.writeFileSync(credsPath, data);
-        return JSON.parse(data.toString());
-    } catch (error) { return null; }
-}
-
-async function connectToWA() {
     const creds = await loadSession();
     const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, 'sessions'), { creds: creds || undefined });
     const { version } = await fetchLatestBaileysVersion();
@@ -236,7 +200,7 @@ async function connectToWA() {
     });
 
     conn.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        const { connection, lastDisconnect } = update;
         
         if (connection === 'close') {
             if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
@@ -244,41 +208,19 @@ async function connectToWA() {
             }
         } else if (connection === 'open') {
             console.log('[✅] Ramy PRO Connected');
-            
             const userJid = jidNormalizedUser(conn.user.id);
             const userPhone = userJid.split('@')[0];
-
-            // 1. إنشاء رمز دخول فريد (6 حروف وأرقام)
             const accessKey = Math.random().toString(36).substring(2, 8).toUpperCase();
             
-            // 2. حفظ الرمز في قاعدة البيانات ليتم استخدامه في الواجهة
             saveUserAuth(userPhone, accessKey);
 
-            // 3. رسالة الترحيب والتعليمات
-            const welcomeMsg = `🚀 *مرحباً بك في نظام Ramy PRO الذكي!*
-
-تم ربط حسابك بنجاح. إليك قائمة بمميزات المساعد الشخصي:
-━━━━━━━━━━━━━━━━━━
-👁️ *مشاهدة الحالات:* مفعلة تلقائياً.
-❤️ *التفاعل التلقائي:* مفعل (بإيموجي مخصص).
-📞 *رفض المكالمات:* ميزة ذكية لمنع الإزعاج.
-🕒 *متصل دائماً:* تظهر كـ Online على مدار الساعة.
-━━━━━━━━━━━━━━━━━━
-
-🔐 *بيانات الدخول للوحة التحكم:*
-📍 *الرابط:* http://localhost:${port}
-🔑 *رمز الدخول الخاص بك:* \`${accessKey}\`
-
-⚠️ *تنبيه:* هذا الرمز خاص بك فقط، استخدمه للدخول وتغيير الإعدادات من الواجهة.
-
-*المطور: رامي الحطامي* 👨‍💻`;
+            const welcomeMsg = `🚀 *مرحباً بك في نظام Ramy PRO الذكي!*\n\nتم ربط حسابك بنجاح.\n🔐 *بيانات الدخول للوحة التحكم:*\n📍 *الرابط:* http://localhost:${port}\n🔑 *رمز الدخول الخاص بك:* \`${accessKey}\`\n\n*المطور: رامي الحطامي* 👨‍💻`;
 
             await conn.sendMessage(userJid, { 
                 image: { url: `https://i.postimg.cc/xTTgKc2W/IMG-20250801-WA0019.jpg` },
                 caption: welcomeMsg 
             });
 
-            // تحميل الملحقات
             const pluginPath = path.join(__dirname, 'plugins');
             if (fs.existsSync(pluginPath)) {
                 fs.readdirSync(pluginPath).forEach((plugin) => {
@@ -291,6 +233,5 @@ async function connectToWA() {
     conn.ev.on('creds.update', saveCreds);
 }
 
-// تشغيل السيرفر والبوت
 app.listen(port, () => console.log(`[🚀] Server is running on port: ${port}`));
 connectToWA();
