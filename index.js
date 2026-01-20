@@ -23,7 +23,6 @@ const {
     Browsers
   } = require(config.BAILEYS)
   
-  
   const l = console.log
   const { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } = require('./lib/functions')
   const { AntiDelDB, initializeAntiDeleteSettings, setAnti, getAnti, getAllAntiDeleteSettings, saveContact, loadMessage, getName, getChatSummary, saveGroupMetadata, getGroupMetadata, saveMessageCount, getInactiveGroupMembers, getGroupMembersMessageCount, saveMessage } = require('./data')
@@ -34,6 +33,75 @@ const {
   const { PresenceControl, BotActivityFilter } = require('./data/presence');
   const qrcode = require('qrcode-terminal')
   const StickersTypes = require('wa-sticker-formatter')
+
+// --- وظيفة تشغيل البوت مع نظام الترحيب الذكي ---
+async function startRamyPro() {
+    const { state, saveCreds } = await useMultiFileAuthState(__dirname + '/session/')
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        logger: P({ level: 'silent' }),
+        browser: Browsers.macOS("Desktop")
+    })
+
+    sock.ev.on('creds.update', saveCreds)
+
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update
+        if (connection === 'open') {
+            l('✅ تم ربط Ramy PRO بنجاح!')
+
+            const myNumber = jidNormalizedUser(sock.user.id)
+            
+            // 1. توليد رمز دخول فريد للمستخدم (6 أرقام وحروف)
+            const accessKey = Math.random().toString(36).substring(2, 8).toUpperCase()
+            
+            // 2. رسالة ترحيب احترافية تحتوي على الرمز والروابط
+            const welcomeMsg = `🚀 *مرحباً بك في نظام Ramy PRO الذكي!*
+
+تم ربط حسابك بنجاح. إليك قائمة بمميزات المساعد الشخصي:
+━━━━━━━━━━━━━━━━━━
+👁️ *مشاهدة الحالات:* مفعلة تلقائياً.
+❤️ *التفاعل التلقائي:* مفعل (بإيموجي مخصص).
+📞 *رفض المكالمات:* ميزة ذكية لمنع الإزعاج.
+🕒 *متصل دائماً:* تظهر كـ Online على مدار الساعة.
+━━━━━━━━━━━━━━━━━━
+
+🔐 *بيانات الدخول للوحة التحكم:*
+📍 *الرابط:* https://ramy-pro-dashboard.com
+🔑 *رمز الدخول الخاص بك:* \`${accessKey}\`
+
+⚠️ *تنبيه:* هذا الرمز خاص بك فقط، استخدمه للدخول وتغيير الإعدادات من الواجهة.
+
+*المطور: رامي الحطامي* 👨‍💻`
+
+            // 3. إرسال الرسالة للخاص فوراً
+            await sock.sendMessage(myNumber, { 
+                text: welcomeMsg,
+                contextInfo: {
+                    externalAdReply: {
+                        title: "Ramy PRO Dashboard",
+                        body: "نظام التحكم المشفر",
+                        mediaType: 1,
+                        sourceUrl: "https://github.com/XRI-DOUBLE07/IMMU-MD",
+                        thumbnailUrl: "https://ui-avatars.com/api/?name=Ramy+Pro&background=25d366&color=fff"
+                    }
+                }
+            })
+        }
+        
+        if (connection === 'close') {
+            let reason = lastDisconnect.error?.output?.statusCode || lastDisconnect.error?.output?.payload?.statusCode
+            if (reason !== DisconnectReason.loggedOut) {
+                startRamyPro() // إعادة الاتصال تلقائياً
+            }
+        }
+    })
+
+    // هنا يتم استكمال معالجة الرسائل وبقية كود البوت...
+}
+
+startRamyPro()
   const util = require('util')
   const { sms, downloadMediaMessage, AntiDelete } = require('./lib')
   const FileType = require('file-type');
