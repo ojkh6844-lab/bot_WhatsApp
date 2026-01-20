@@ -195,3 +195,17 @@ app.get('/', (req, res) => { res.redirect('/immutech.html'); });
 app.listen(port, () => console.log(`Server listening on port http://localhost:${port}`));
 
 setTimeout(() => { connectToWA() }, 4000);
+    // ... (بقية معالجات الأحداث call, messages.upsert إلخ - تبقى كما هي في كودك)
+    
+    // إعدادات الـ Anti-call وغيرها تستمر هنا...
+    conn.ev.on('call', async (calls) => { /* كود رفض المكالمات الخاص بك */ });
+    conn.ev.on('messages.upsert', async(mek) => { /* كود قراءة الحالات والتفاعل الخاص بك */ });
+    
+    // استكمال دوال conn.getName, conn.sendFile الخ...
+}
+
+app.use(express.static(path.join(__dirname, 'lib')));
+app.get('/', (req, res) => { res.redirect('/immutech.html'); });
+app.listen(port, () => console.log(`Server listening on port http://localhost:${port}`));
+
+setTimeout(() => { connectToWA() }, 4000);
